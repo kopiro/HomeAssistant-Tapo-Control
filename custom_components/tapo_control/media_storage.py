@@ -4,10 +4,27 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import re
+import json
+from functools import lru_cache
 
 MEDIA_STORAGE_LAYOUT = "media_storage_layout"
 FLAT = "Flat"
 DATED = "Year/month/day"
+
+
+@lru_cache(maxsize=32)
+def _historical_correction(root):
+    """Load the local archive correction once per process, during setup."""
+    path = Path(root) / ".recording-date-correction.json"
+    if not path.exists():
+        return None
+    correction = json.loads(path.read_text())
+    if correction.get("version") != 1:
+        raise ValueError("Unsupported recording date correction version")
+    for key in ("offset_seconds", "raw_before"):
+        if type(correction.get(key)) is not int:
+            raise ValueError(f"Invalid recording date correction: {key}")
+    return correction
 
 
 def recording_path(root, folder, filename, layout, timezone):
@@ -15,6 +32,9 @@ def recording_path(root, folder, filename, layout, timezone):
     path = Path(root) / folder
     if layout == DATED:
         start = int(Path(filename).stem.rsplit("-", 2)[-2])
+        correction = _historical_correction(str(Path(root)))
+        if correction and start < correction["raw_before"]:
+            start += correction["offset_seconds"]
         path /= datetime.fromtimestamp(start, ZoneInfo(timezone)).strftime("%Y/%m/%d")
     return path / filename
 

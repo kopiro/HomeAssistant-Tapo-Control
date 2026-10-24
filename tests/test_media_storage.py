@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import json
 
 spec = importlib.util.spec_from_file_location(
     'media_storage', Path(__file__).parents[1] / 'custom_components/tapo_control/media_storage.py'
@@ -64,6 +65,49 @@ class StorageLayoutTests(unittest.TestCase):
             source.rename(target)
             self.assertEqual(m.migrate_layout(root, m.DATED, 'UTC'), 1)
             self.assertEqual(len(m.recording_files(videos)), 2)
+
+
+class HistoricalCorrectionTests(unittest.TestCase):
+    def tearDown(self):
+        m._historical_correction.cache_clear()
+
+    def test_shift_only_before_cutoff_and_preserve_filename(self):
+        with TemporaryDirectory() as root:
+            (Path(root) / '.recording-date-correction.json').write_text(json.dumps({
+                'version': 1, 'offset_seconds': 86400, 'raw_before': 1704151860,
+            }))
+            old = m.recording_path(root, 'videos', '1704151800-1704151860.mp4', m.DATED, 'UTC')
+            new = m.recording_path(root, 'videos', '1704151860-1704151920.mp4', m.DATED, 'UTC')
+            self.assertEqual(old.relative_to(root).as_posix(), 'videos/2024/01/02/1704151800-1704151860.mp4')
+            self.assertEqual(new.relative_to(root).as_posix(), 'videos/2024/01/01/1704151860-1704151920.mp4')
+
+    def test_migration_and_reverse_correction_preserve_content(self):
+        with TemporaryDirectory() as root:
+            source = m.recording_path(root, 'videos', '1704151800-1704151860.mp4', m.DATED, 'UTC')
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b'video content')
+            metadata = Path(root) / '.recording-date-correction.json'
+            metadata.write_text(json.dumps({'version': 1, 'offset_seconds': 86400, 'raw_before': 1704151860}))
+            m._historical_correction.cache_clear()
+            self.assertEqual(m.migrate_layout(root, m.DATED, 'UTC'), 1)
+            shifted = m.recording_path(root, 'videos', source.name, m.DATED, 'UTC')
+            self.assertEqual(shifted.read_bytes(), b'video content')
+            metadata.unlink()
+            m._historical_correction.cache_clear()
+            self.assertEqual(m.migrate_layout(root, m.DATED, 'UTC'), 1)
+            self.assertEqual(source.read_bytes(), b'video content')
+
+    def test_invalid_configuration_fails_before_moving_files(self):
+        with TemporaryDirectory() as root:
+            p = Path(root) / 'videos/1704151800-1704151860.mp4'
+            p.parent.mkdir()
+            p.write_bytes(b'original')
+            (Path(root) / '.recording-date-correction.json').write_text(json.dumps({
+                'version': 1, 'offset_seconds': 'invalid', 'raw_before': 1704151860,
+            }))
+            with self.assertRaises(ValueError):
+                m.migrate_layout(root, m.DATED, 'UTC')
+            self.assertEqual(p.read_bytes(), b'original')
 
 
 if __name__ == '__main__':
