@@ -1,0 +1,68 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-archive
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'kopiro/HomeAssistant-Tapo-Control'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: archive
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.14'
+      - name: Merge upstream main
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch https://github.com/JurajNyiri/HomeAssistant-Tapo-Control.git main
+          upstream_sha=$(git rev-parse FETCH_HEAD)
+          if git merge-base --is-ancestor "$upstream_sha" HEAD; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'Already includes upstream main.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git merge --no-ff --no-edit "$upstream_sha"
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          echo "Merged upstream $upstream_sha; automated checks follow." >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify fork behavior and syntax
+        run: |
+          python -B -m unittest discover -s tests -v
+          python -m compileall -q custom_components/tapo_control
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('custom_components/tapo_control/manifest.json').read_text())
+          assert manifest['domain'] == 'tapo_control'
+          assert manifest['issue_tracker'] == 'https://github.com/kopiro/HomeAssistant-Tapo-Control/issues'
+          for path in Path('custom_components/tapo_control').rglob('*.json'):
+              json.loads(path.read_text())
+          json.loads(Path('hacs.json').read_text())
+          PY
+          git diff --check
+      - name: Publish checked merge
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          git push origin HEAD:archive
+          echo 'Published to archive. Home Assistant installation is a separate action.' >> "$GITHUB_STEP_SUMMARY"

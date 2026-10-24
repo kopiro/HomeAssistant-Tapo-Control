@@ -1,9 +1,17 @@
 # Maintaining the archive fork
 
 The `archive` branch contains our changes; `main` is the original upstream snapshot.
-The baseline is upstream 7.2.10 at `2ad3508`. We preserve upstream history and merge
-selected upstream releases into `archive`. Updates are reviewed and tested manually;
-there is no unattended deployment or background AI maintenance.
+The original baseline is upstream 7.2.10 at `2ad3508`. The current upstream version
+is recorded in the component manifest; the branch history records subsequent merges.
+A GitHub Actions job merges upstream `main` daily at 03:17 UTC, runs the fork tests,
+compiles the component, validates JSON and support metadata, then pushes to `archive`.
+It also supports manual dispatch. Conflicts, failed checks or concurrent branch changes
+stop the job without publishing. Check the Actions page for failed runs.
+
+The job uses standard public-repository runners and no AI model or paid API. It never
+contacts Home Assistant. Automated checks do not establish runtime compatibility;
+HA updates remain an explicit installation action. GitHub schedules can be delayed
+or disabled after prolonged repository inactivity.
 
 ## Installation and updates
 
@@ -20,7 +28,13 @@ component; do not install both simultaneously or remove your existing camera ent
 The manifest retains the baseline upstream version until we publish a distinct fork
 release. Do not infer the installed fork commit from that version number. Record the
 Git commit used for deployment. Do not apply upstream HACS updates over this fork.
-HACS migration and fork release delivery are not validated yet.
+
+For HACS, add `https://github.com/kopiro/HomeAssistant-Tapo-Control` as a custom
+Integration repository and select the default `archive` branch. Remove the upstream
+repository from HACS tracking before downloading this fork; keep the HA camera entries
+and archive data. Both repositories write the same integration directory and must not
+be managed as two installed components. Until releases are published, updates are
+commit-based. Do not use inherited upstream version tags: they omit the fork patches.
 
 ## Behavior and limits
 
@@ -58,7 +72,7 @@ cached until restart and migration then updates the directory placement.
 To reverse a correction, set its offset to zero and restart Core with this fork
 still installed. Verify migration before removing the metadata or patched component.
 
-## Bringing in an upstream release
+## Reviewing an upstream update or resolving a failed scheduled merge
 
 From a clean clone of this fork:
 
@@ -79,7 +93,7 @@ Run `python3 -B -m unittest discover -s tests -v` and compile the component. The
 validate a candidate on Home Assistant: check both layouts, migration and rollback,
 media browsing/playback, an actual new download, and retention behavior. Preserve a
 rollback copy and compare file counts/content before and after migration. Only then
-publish a clearly versioned fork release and deploy it. Document the upstream tag,
+publish a clearly versioned fork release or deploy the candidate commit. Document the upstream tag,
 patch commits, dependencies, observed results, and untested scenarios in release notes.
 A clean Git merge alone is not compatibility evidence.
 

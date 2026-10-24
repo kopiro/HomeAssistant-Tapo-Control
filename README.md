@@ -8,9 +8,9 @@ It is not an official upstream release. The `archive` branch adds:
 - Full-history synchronization and retention after SD-card rotation when the sync-hours field is blank.
 - Optional historical folder-date corrections, configured per archive without renaming recordings.
 
-**Status:** experimental, source-only distribution based on upstream 7.2.10
-(commit `2ad3508`). Newer upstream releases are not included yet. No maintained fork
-release has been published. The original Apache-2.0 license and attribution are retained.
+**Status:** experimental, with commit-based updates from the `archive` branch.
+The fork started from upstream 7.2.10 (`2ad3508`); a daily checked merge job now follows
+upstream `main`. No maintained fork release has been published. The original Apache-2.0 license and attribution are retained.
 
 Report fork-specific problems in [this fork's issue tracker](https://github.com/kopiro/HomeAssistant-Tapo-Control/issues).
 See [FORK.md](FORK.md) for installation, known limits, rollback and the upstream-update process.
@@ -38,7 +38,7 @@ Copy contents of custom_components/tapo_control/ to custom_components/tapo_contr
 
 ## Installation using HACS
 
-The default HACS listing installs the upstream integration, not this fork. HACS installation and updates from this fork have not been validated. Use the source installation instructions in [FORK.md](FORK.md) for now. An upstream HACS update can overwrite these changes.
+The default HACS listing installs the upstream integration, not this fork. Add this fork as a custom Integration repository and select the `archive` branch; see [FORK.md](FORK.md) for migration details. An upstream HACS update can overwrite these changes.
 
 ## Requirements
 
