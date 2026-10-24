@@ -960,12 +960,14 @@ async def mediaCleanup(hass, entry, deviceData):
     await deleteFilesNotIncluding(hass, hotDirPath + "/videos/", UUID)
     await deleteFilesNotIncluding(hass, hotDirPath + "/thumbs/", UUID)
 
-    await deleteFilesNoLongerPresentInCamera(
-        hass, entry_id, deviceData, ".mp4", "videos"
-    )
-    await deleteFilesNoLongerPresentInCamera(
-        hass, entry_id, deviceData, ".jpg", "thumbs"
-    )
+    # Unlimited sync retains recordings after SD-card rotation.
+    if entry.data.get(MEDIA_SYNC_HOURS) != "":
+        await deleteFilesNoLongerPresentInCamera(
+            hass, entry_id, deviceData, ".mp4", "videos"
+        )
+        await deleteFilesNoLongerPresentInCamera(
+            hass, entry_id, deviceData, ".jpg", "thumbs"
+        )
 
     await deleteColdFilesOlderThanMaxSyncTime(hass, entry, deviceData, ".mp4", "videos")
     # Keep thumbnails until their recording disappears from the camera.

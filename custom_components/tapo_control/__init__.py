@@ -1324,14 +1324,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                                 totalRecordingsToDownload = 0
                                 for recording in recordingsForDay:
                                     for recordingKey in recording:
-                                        if recording[recordingKey]["endTime"] > int(
+                                        if mediaSyncTime is False or recording[recordingKey]["endTime"] > int(
                                             ts
                                         ) - (int(mediaSyncTime)):
                                             totalRecordingsToDownload += 1
                                 recordingCount = 0
                                 for recording in recordingsForDay:
                                     for recordingKey in recording:
-                                        if recording[recordingKey]["endTime"] > (
+                                        if mediaSyncTime is False or recording[recordingKey]["endTime"] > (
                                             int(ts) - (int(mediaSyncTime))
                                         ):
                                             recordingCount += 1
