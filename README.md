@@ -1,8 +1,20 @@
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
-[![GitHub release](https://img.shields.io/github/release/JurajNyiri/HomeAssistant-Tapo-Control.svg)](https://github.com/JurajNyiri/HomeAssistant-Tapo-Control/releases/)
-[![HA integration usage](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.tapo_control.total)](https://analytics.home-assistant.io/custom_integrations.json)
+# Tapo: Cameras Control — Archive fork
 
-# HomeAssistant - Tapo: Cameras Control
+This is [kopiro's community-maintained fork](https://github.com/kopiro/HomeAssistant-Tapo-Control)
+of [JurajNyiri's Tapo: Cameras Control](https://github.com/JurajNyiri/HomeAssistant-Tapo-Control).
+It is not an official upstream release. The `archive` branch adds:
+
+- Optional year/month/day folders, with automatic migration in either direction.
+- Full-history synchronization and retention after SD-card rotation when the sync-hours field is blank.
+- Optional historical folder-date corrections, configured per archive without renaming recordings.
+
+**Status:** experimental, source-only distribution based on upstream 7.2.10
+(commit `2ad3508`). Newer upstream releases are not included yet. No maintained fork
+release has been published. The original Apache-2.0 license and attribution are retained.
+
+Report fork-specific problems in [this fork's issue tracker](https://github.com/kopiro/HomeAssistant-Tapo-Control/issues).
+See [FORK.md](FORK.md) for installation, known limits, rollback and the upstream-update process.
+Retention is not an independent backup: maintain a separate backup of recordings you cannot lose.
 
 Custom component - Tapo: Cameras Control - to add Tapo cameras, doorbells and chimes into Home Assistant
 
@@ -26,7 +38,7 @@ Copy contents of custom_components/tapo_control/ to custom_components/tapo_contr
 
 ## Installation using HACS
 
-HACS is a community store for Home Assistant. You can install [HACS](https://github.com/custom-components/hacs) and then install Tapo: Cameras Control from the HACS store.
+The default HACS listing installs the upstream integration, not this fork. HACS installation and updates from this fork have not been validated. Use the source installation instructions in [FORK.md](FORK.md) for now. An upstream HACS update can overwrite these changes.
 
 ## Requirements
 
@@ -177,7 +189,7 @@ With both **Cache thumbnails** and **Preload thumbnails** enabled, the initial m
 
 If the initial media scan fails (for example, because no SD card is inserted), retries use the battery polling interval on battery and solar-powered cameras (10 minutes by default), or 60 seconds on mains-powered cameras. This applies even when video synchronization is disabled. An available camera or newly inserted card can therefore be detected on a later retry without reloading the integration.
 
-You can enable this setting by navigating to `Home Assistant Settings` -> `Devices & services` and clicking the `Tapo: Cameras control` integration. There, click on the `Configure` button next to the Tapo device you wish to turn media synchronization on for, and choose `Configure media`. Here, you need to define the number of hours to synchronize. Unless it is specified, synchronization does not run. Here, you are able to also set the storage path where the synchronized recordings will be stored (defaults to /config/.storage/tapo_control).
+You can enable this setting by navigating to `Home Assistant Settings` -> `Devices & services` and clicking the `Tapo: Cameras control` integration. There, click on the `Configure` button next to the Tapo device you wish to turn media synchronization on for, and choose `Configure media`. Here, you need to define the number of hours to synchronize. In this fork, leaving the field blank synchronizes all available history and retains downloaded recordings after they disappear from the camera. A numeric value keeps the existing bounded-window cleanup behavior. Here, you are able to also set the storage path where the synchronized recordings will be stored (defaults to /config/.storage/tapo_control).
 
 The default storage is included in Home Assistant configuration backups. To keep recordings and thumbnails out of those backups, choose a directory such as `/media/tapo_control/front_camera` and exclude media from your backups.
 

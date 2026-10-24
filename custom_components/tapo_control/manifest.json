@@ -1,10 +1,10 @@
 {
   "domain": "tapo_control",
   "name": "Tapo: Cameras Control",
-  "documentation": "https://github.com/JurajNyiri/HomeAssistant-Tapo-Control",
-  "issue_tracker": "https://github.com/JurajNyiri/HomeAssistant-Tapo-Control/issues",
+  "documentation": "https://github.com/kopiro/HomeAssistant-Tapo-Control",
+  "issue_tracker": "https://github.com/kopiro/HomeAssistant-Tapo-Control/issues",
   "codeowners": [
-    "@JurajNyiri"
+    "@kopiro"
   ],
   "version": "7.2.10",
   "requirements": [
