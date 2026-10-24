@@ -2249,11 +2249,36 @@ async def getCamData(hass, controller, chInfo=None):
         whitelampConfigIntensity = None
     camData["whitelampConfigIntensity"] = whitelampConfigIntensity
 
+    # Tapo's brightness screen uses this capability, or five legacy levels.
+    try:
+        whitelampConfigIntensityMax = int(
+            data["getWhitelampCapability"][0]["image_capability"]["white_lamp"][
+                "wtl_intensity_range"
+            ]
+        )
+        if whitelampConfigIntensityMax < 1:
+            raise ValueError("Invalid spotlight intensity maximum")
+    except (KeyError, IndexError, TypeError, ValueError):
+        whitelampConfigIntensityMax = 5
+    camData["whitelampConfigIntensityMax"] = whitelampConfigIntensityMax
+
     try:
         whitelampStatus = data["getWhitelampStatus"][0]["status"]
     except Exception:
         whitelampStatus = None
     camData["whitelampStatus"] = whitelampStatus
+
+    try:
+        nightlight_status = data["getNightlightStatus"][0]
+        if nightlight_status["state"] not in ("on", "off"):
+            raise ValueError("Invalid nightlight state")
+        intensity = int(nightlight_status["intensity"])
+        if not 0 <= intensity <= 100:
+            raise ValueError("Invalid nightlight intensity")
+        nightlight_status = {**nightlight_status, "intensity": intensity}
+    except (KeyError, IndexError, TypeError, ValueError):
+        nightlight_status = None
+    camData["nightlight_status"] = nightlight_status
 
     try:
         sdCardData = []
