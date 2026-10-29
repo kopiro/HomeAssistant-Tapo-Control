@@ -101,12 +101,12 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.env["getRecording"].await_count, 2)
         self.assertEqual(self.device["mediaSyncFailures"], 0)
 
-    async def test_other_unresolvable_error_aborts_pass(self):
+    async def test_unavailable_clip_does_not_starve_later_recordings(self):
         self.recordings()
-        self.env["getRecording"].side_effect = Unresolvable("File missing")
+        self.env["getRecording"].side_effect = [Unresolvable("File missing"), None]
         await asyncio.create_task(self.sync(None, self.entry, self.device))
-        self.assertEqual(self.env["getRecording"].await_count, 1)
-        self.assertEqual(self.device["mediaSyncFailures"], 1)
+        self.assertEqual(self.env["getRecording"].await_count, 2)
+        self.assertEqual(self.device["mediaSyncFailures"], 0)
 
     async def test_cancellation_propagates_and_clears_running(self):
         self.recordings()

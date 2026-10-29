@@ -49,7 +49,8 @@ commit-based. Do not use inherited upstream version tags: they omit the fork pat
 - Failed archive scans, synchronization passes and clock updates wait five minutes
   before retrying, then double the delay up to one hour. The known ONVIF `error time`
   fault retains a 24-hour delay. Successful operations reset their failure count.
-  A failed download ends the current pass; the synchronization sensor exposes failure
+  A connection or unexpected download error ends the current pass; individual
+  unavailable clips are still skipped. The synchronization sensor exposes failure
   counts and remaining sync/clock retry delays. These delays reset on integration reload.
   This limits repeated requests to an unhealthy camera; it does not establish or fix
   the cause of a camera's video service freezing. SD-card recording is unchanged.

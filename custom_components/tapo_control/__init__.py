@@ -1377,7 +1377,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                                                 ):
                                                     LOGGER.info(err)
                                                 else:
-                                                    raise
+                                                    LOGGER.warning(err)
                             else:
                                 LOGGER.debug(
                                     f"Media sync ignoring {searchResult[key]["date"]}. Media sync: {enableMediaSync}."
