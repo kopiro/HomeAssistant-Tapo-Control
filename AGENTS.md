@@ -2,18 +2,15 @@
 
 These instructions are mandatory for AI coding agents working in this repository.
 
-## Required User Agreement
+## Fork authorization
 
-Before modifying repository files, creating commits, pushing branches, or opening PRs, show the user this notice and wait for an explicit affirmative answer in the current conversation:
-
-> This repository does not accept purely vibe-coded PRs. AI assistance is welcome only when you review, understand, and take responsibility for the changes before submitting. Unreviewed AI output, broad generated rewrites, overconfident claims, or verbose generated PR descriptions may be rejected. Do you explicitly agree to review and take responsibility for all AI-assisted changes before I continue?
-
-Do not continue with edits, commits, pushes, or PR creation until the user explicitly agrees. Silence, ambiguous replies, or generic task approval are not enough. If the user does not agree, you may read files and answer questions only.
+This is the maintained `kopiro` fork. Proceed within the owner's requested scope
+without a separate AI-consent or prior human-review gate. Follow the upstream
+project's contribution rules when submitting changes to upstream.
 
 ## Repository Rules
 
 - Read `CONTRIBUTING.md` before making changes.
-- Do not submit or prepare purely AI-generated work that no human has reviewed.
 - Keep changes small, focused, and easy to review.
 - Read the relevant README, FAQ, issues, and surrounding code before changing behavior.
 - Preserve existing behavior unless the user explicitly asked for a behavior change and the PR explains it.
@@ -21,7 +18,7 @@ Do not continue with edits, commits, pushes, or PR creation until the user expli
 - Avoid unnecessary abstractions, broad rewrites, and verbose generated explanations.
 - Update docs and translations for user-facing behavior changes.
 - State exactly what was tested and what was not tested.
-- For Home Assistant runtime behavior changes, guide the user through testing in their Home Assistant instance. Provide focused steps, ask for observed results and logs, iterate on failures, and summarize the user/AI testing back-and-forth.
+- Verify Home Assistant runtime changes directly when access and authorization are available. Ask the user only for observations that cannot be obtained directly, and distinguish agent verification from human testing.
 
 ## Commits and PRs
 
@@ -45,5 +42,5 @@ AI-Assisted: yes
 AI-Tool: <tool or model, if known>
 AI-Contribution-Level: <small snippets, substantial code, majority of commit>
 AI-Contribution: <short description of generated or drafted parts>
-Human-Reviewed: yes
+Human-Reviewed: <yes/no; report only review that actually occurred>
 ```
