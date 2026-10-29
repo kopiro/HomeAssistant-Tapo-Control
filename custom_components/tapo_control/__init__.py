@@ -1238,7 +1238,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     if len(username) == 0 or len(password) == 0:
                         debugMsg += " This is because RTSP username or password is empty."
                     LOGGER.debug(debugMsg)
-                if enableTimeSync:
+                if enableTimeSync and time.monotonic() >= hass.data[DOMAIN][entry.entry_id].get(
+                    "timeSyncRetryAt", 0
+                ):
                     try:
                         await syncTime(hass, entry.entry_id)
                     except Exception as e:

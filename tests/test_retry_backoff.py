@@ -177,6 +177,19 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
         self.device["lastTimeSync"] = 9999
         self.assertFalse(eval(expression, self.env))
 
+    def test_startup_clock_sync_respects_an_earlier_coordinator_failure(self):
+        tree = ast.parse((ROOT / "__init__.py").read_text())
+        gate = next(n.test for n in ast.walk(tree) if isinstance(n, ast.If)
+                    and ast.unparse(n.test).startswith("enableTimeSync and"))
+        expression = compile(ast.Expression(gate), "startup-time-sync-gate", "eval")
+        self.env["enableTimeSync"] = True
+        self.clock_error(TimeoutError("coordinator sync"))
+        self.assertFalse(eval(expression, self.env))
+        self.clock.return_value = self.device["timeSyncRetryAt"]
+        self.assertTrue(eval(expression, self.env))
+        self.env["enableTimeSync"] = False
+        self.assertFalse(eval(expression, self.env))
+
     async def test_watchdog_defers_retry_without_releasing_running_guard(self):
         self.env.update(ts=2000, MEDIA_SYNC_WATCHDOG_SECONDS=300)
         self.hass.async_create_task = lambda coro: asyncio.create_task(coro)
