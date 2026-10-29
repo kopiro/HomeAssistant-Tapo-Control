@@ -46,6 +46,13 @@ commit-based. Do not use inherited upstream version tags: they omit the fork pat
   be recovered.
 - Historical corrections affect directory dates only. File names, video contents,
   embedded timestamps and media-browser labels are not rewritten.
+- Failed archive scans, synchronization passes and clock updates wait five minutes
+  before retrying, then double the delay up to one hour. The known ONVIF `error time`
+  fault retains a 24-hour delay. Successful operations reset their failure count.
+  A failed download ends the current pass; the synchronization sensor exposes failure
+  counts and remaining sync/clock retry delays. These delays reset on integration reload.
+  This limits repeated requests to an unhealthy camera; it does not establish or fix
+  the cause of a camera's video service freezing. SD-card recording is unchanged.
 - This is experimental. Hub and battery devices have not been tested live with these
   changes. Initial validation used Home Assistant 2026.10.2. Camera/session timeouts
   were observed during restart scans; this fork does not claim to solve them.

@@ -2,6 +2,7 @@ from .media_storage import MEDIA_STORAGE_LAYOUT, FLAT, migrate_layout
 import datetime
 import hashlib
 import asyncio
+import time
 from aiohttp import ClientError
 
 from homeassistant.core import HomeAssistant, callback
@@ -97,6 +98,7 @@ from .utils import (
     update_listener,
     initOnvifEvents,
     syncTime,
+    retryDelay,
     getLatestFirmwareVersion,
     findMedia,
     getRecordings,
@@ -712,26 +714,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             return allEntities
 
         def handleTimeSyncError(error):
+            device = hass.data[DOMAIN][entry.entry_id]
+            device["timeSyncFailures"] = device.get("timeSyncFailures", 0) + 1
+            delay = retryDelay(device["timeSyncFailures"])
             if (
                 error.__class__.__module__ == "zeep.exceptions"
                 and error.__class__.__name__ == "Fault"
                 and "error time" in str(error).lower()
             ):
-                # `lastTimeSync` is compared with `TIME_SYNC_PERIOD`, so offset it to back off 24 hours.
-                hass.data[DOMAIN][entry.entry_id]["lastTimeSync"] = (
-                    datetime.datetime.utcnow().timestamp()
-                    + int(timedelta(hours=24).total_seconds())
-                    - TIME_SYNC_PERIOD
-                )
-                LOGGER.warning(
-                    "Time sync for %s failed with zeep fault 'error time'. Backing off for 24 hours. This is issue with camera, do not report it to integration github. See more at https://github.com/JurajNyiri/HomeAssistant-Tapo-Control/issues/1166 .",
-                    host,
-                )
-            else:
-                LOGGER.error(
-                    f"Failed to sync time for {host}: {error}",
-                    exc_info=True,
-                )
+                delay = 24 * 60 * 60
+            device["timeSyncRetryAt"] = time.monotonic() + delay
+            LOGGER.warning(
+                "Time sync for %s failed (%s): %s. Retrying in %s seconds.",
+                host, type(error).__name__, error, delay,
+            )
 
         async def async_update_data():
             LOGGER.debug("async_update_data - entry")
@@ -761,6 +757,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     # Leave the running flag set until the task's finally block
                     # finishes. Clearing it here would permit overlapping syncs.
                     task.cancel()
+                    device["mediaSyncFailures"] = device.get("mediaSyncFailures", 0) + 1
+                    device["mediaSyncRetryAt"] = time.monotonic() + retryDelay(
+                        device["mediaSyncFailures"]
+                    )
                     device["mediaSyncStallCount"] = (
                         device.get("mediaSyncStallCount", 0) + 1
                     )
@@ -826,6 +826,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     if (
                         ts - hass.data[DOMAIN][entry.entry_id]["lastTimeSync"]
                         > TIME_SYNC_PERIOD
+                        and time.monotonic() >= hass.data[DOMAIN][entry.entry_id].get(
+                            "timeSyncRetryAt", 0
+                        )
                     ):
                         try:
                             await syncTime(hass, entry.entry_id)
@@ -1269,6 +1272,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             manualTask = device.get("manualDownloadTask")
             if (
                 enableMediaSync
+                and time.monotonic() >= device.get("mediaSyncRetryAt", 0)
                 and entry.entry_id in hass.data[DOMAIN]
                 and "controller" in device
                 and device["runningMediaSync"] is False
@@ -1371,19 +1375,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                                                 ):
                                                     LOGGER.info(err)
                                                 else:
-                                                    LOGGER.warning(err)
-                                            except Exception as err:
-                                                device["runningMediaSync"] = False
-                                                LOGGER.error(err)
+                                                    raise
                             else:
                                 LOGGER.debug(
                                     f"Media sync ignoring {searchResult[key]["date"]}. Media sync: {enableMediaSync}."
                                 )
-                    device["lastMediaSyncSuccess"] = (
-                        datetime.datetime.utcnow().timestamp()
-                    )
+                    if device[ENABLE_MEDIA_SYNC]:
+                        device["lastMediaSyncSuccess"] = (
+                            datetime.datetime.utcnow().timestamp()
+                        )
+                        device["mediaSyncFailures"] = 0
+                        device["mediaSyncRetryAt"] = 0
                 except Exception as err:
-                    LOGGER.error(err)
+                    device["mediaSyncFailures"] = device.get("mediaSyncFailures", 0) + 1
+                    delay = retryDelay(device["mediaSyncFailures"])
+                    device["mediaSyncRetryAt"] = time.monotonic() + delay
+                    LOGGER.warning(
+                        "Media sync for %s failed (%s): %s. Retrying in %s seconds.",
+                        device["name"], type(err).__name__, err, delay,
+                    )
                 finally:
                     LOGGER.debug("runningMediaSync -false")
                     device["runningMediaSync"] = False

@@ -690,6 +690,7 @@ async def findMedia(hass, entryData, entry, recordingsList=None):
             # that could not be listed would look empty.
             entryData["mediaScanResult"].update(mediaScanResult)
             entryData["mediaScanFailures"] = entryData.get("mediaScanFailures", 0) + 1
+            entryData["lastMediaScanAttempt"] = time.monotonic()
             LOGGER.warning(
                 "Media scan for %s is incomplete, %d day(s) could not be listed (%s). "
                 "Recordings found so far are available; the scan will be retried later.",
@@ -706,8 +707,10 @@ async def findMedia(hass, entryData, entry, recordingsList=None):
 
         await mediaCleanup(hass, entry, entryData)
     except Exception as err:
+        entryData["mediaScanFailures"] = entryData.get("mediaScanFailures", 0) + 1
+        entryData["lastMediaScanAttempt"] = time.monotonic()
         LOGGER.warning(
-            "Media scan failed for %s; will retry at the media polling interval: %s",
+            "Media scan failed for %s; will retry with backoff: %s",
             entryData["name"],
             err,
         )
@@ -2660,6 +2663,8 @@ async def syncTime(hass, entry_id):
             + str(now)
         )
         hass.data[DOMAIN][entry_id]["lastTimeSync"] = now.timestamp()
+        hass.data[DOMAIN][entry_id]["timeSyncFailures"] = 0
+        hass.data[DOMAIN][entry_id]["timeSyncRetryAt"] = 0
     else:
         LOGGER.warning(
             "Onvif has not been initialized yet, unable to synchronize time."
@@ -2870,6 +2875,11 @@ def isCacheSupported(check_function, rawData):
     return False
 
 
+def retryDelay(failures, base=300):
+    """Back off after consecutive failures, with a one-hour ceiling."""
+    return min(base * 2 ** min(max(failures - 1, 0), 4), 3600)
+
+
 async def scheduleAll(hass, device, entry, mediaSync):
     LOGGER.debug("scheduleAll for " + device["name"] + " called.")
     mediaSyncInterval = 60
@@ -2894,13 +2904,12 @@ async def scheduleAll(hass, device, entry, mediaSync):
     elif device["initialMediaScanRunning"] is False:
         # Failed scans must not wake the camera on every coordinator update,
         # including when there is no SD card and media sync is disabled.
-        now = asyncio.get_running_loop().time()
+        now = time.monotonic()
         lastAttempt = device.get("lastMediaScanAttempt")
-        # Back off after scans that could not list every day, up to one hour.
-        retryInterval = max(
-            mediaSyncInterval,
-            min(mediaSyncInterval * 2 ** min(device.get("mediaScanFailures", 0), 6), 3600),
-        )
+        failures = device.get("mediaScanFailures", 0)
+        retryInterval = mediaSyncInterval
+        if failures:
+            retryInterval = max(mediaSyncInterval, retryDelay(failures))
         if lastAttempt is not None and now - lastAttempt < retryInterval:
             return
         device["lastMediaScanAttempt"] = now
@@ -2919,8 +2928,10 @@ async def scheduleAll(hass, device, entry, mediaSync):
         except Exception as err:
             device["initialMediaScanRunning"] = False
             device["mediaSyncAvailable"] = False
+            device["mediaScanFailures"] = device.get("mediaScanFailures", 0) + 1
+            device["lastMediaScanAttempt"] = time.monotonic()
             enableMediaSync = device[ENABLE_MEDIA_SYNC]
-            errMsg = "Unable to retrieve recordings list, will retry at the media polling interval. Do you have an SD card inserted, and is the camera reachable?"
+            errMsg = "Unable to retrieve recordings list, will retry with backoff. Do you have an SD card inserted, and is the camera reachable?"
             if enableMediaSync:
                 LOGGER.warning(errMsg)
                 LOGGER.warning(device["name"] + ": " + str(err))

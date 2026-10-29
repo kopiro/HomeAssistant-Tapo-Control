@@ -1,6 +1,7 @@
 """Tapo camera sensors."""
 
 import re
+import time
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
@@ -388,6 +389,15 @@ class TapoSyncSensor(TapoSensorEntity):
             "last_sync_activity": _fmt(device.get("lastMediaSyncActivity", 0)),
             "last_sync_success": _fmt(device.get("lastMediaSyncSuccess", 0)),
             "stall_count": device.get("mediaSyncStallCount", 0),
+            "sync_failures": device.get("mediaSyncFailures", 0),
+            "sync_retry_in_seconds": max(
+                0, round(device.get("mediaSyncRetryAt", 0) - time.monotonic())
+            ),
+            "scan_failures": device.get("mediaScanFailures", 0),
+            "time_sync_failures": device.get("timeSyncFailures", 0),
+            "time_sync_retry_in_seconds": max(
+                0, round(device.get("timeSyncRetryAt", 0) - time.monotonic())
+            ),
             "last_progress": data.get("downloadProgress") or "Idle",
         }
 
