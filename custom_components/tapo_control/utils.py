@@ -634,6 +634,9 @@ async def findMedia(hass, entryData, entry, recordingsList=None):
                         hass, entryData, tapoController, day
                     )
                 except Exception as err:
+                    if "USER_ID_FULL" in str(err) or "-71101" in str(err):
+                        # The playback service is full, not just this day's index.
+                        raise
                     # One slow or failing day must not throw away every other
                     # day of the scan: retry it once, then skip it for now.
                     LOGGER.debug(f"Listing day {day} failed ({err}), retrying once...")
@@ -643,6 +646,8 @@ async def findMedia(hass, entryData, entry, recordingsList=None):
                             hass, entryData, tapoController, day
                         )
                     except Exception as err:
+                        if "USER_ID_FULL" in str(err) or "-71101" in str(err):
+                            raise
                         LOGGER.warning(
                             "Could not list recordings of %s for day %s, skipping it for now: %s",
                             entryData["name"],
@@ -1233,6 +1238,12 @@ async def getRecording(
 
         if downloadedFile["currentAction"] == "Recording in progress":
             raise Unresolvable("Recording is currently in progress.")
+        if downloadedFile["currentAction"] == "Camera busy":
+            raise RuntimeError(
+                f"Camera playback is busy ({downloadedFile.get('errorCode')})"
+            )
+        if downloadedFile["currentAction"] == "Giving up":
+            raise TimeoutError("Camera recording transfer did not complete")
 
         completion_message = "Finished download"
         entryData["downloadProgress"] = completion_message

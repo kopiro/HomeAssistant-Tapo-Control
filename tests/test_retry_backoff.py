@@ -3,6 +3,10 @@ import ast
 import asyncio
 import datetime
 import logging
+import os
+import pathlib
+import tempfile
+from typing import Optional, Callable
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -153,6 +157,53 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
         await find(self.hass, self.device, self.entry)
         self.assertTrue(self.device["initialMediaScanDone"])
         self.assertEqual(self.device["mediaScanFailures"], 0)
+
+    async def test_full_playback_service_aborts_scan_before_retrying_other_dates(self):
+        find = load("findMedia", "utils.py", self.env)
+        self.env["getRecordings"].side_effect = Exception("USER_ID_FULL (-71101)")
+        await find(self.hass, self.device, self.entry,
+                   [{"day": {"date": "20261028"}}, {"day": {"date": "20261029"}}])
+        self.assertEqual(self.env["getRecordings"].await_count, 1)
+        self.assertEqual(self.device["mediaScanFailures"], 1)
+        self.assertFalse(self.device["initialMediaScanDone"])
+        self.env["mediaCleanup"].assert_not_awaited()
+
+    async def test_capacity_error_on_day_retry_also_aborts_scan(self):
+        self.env["asyncio"] = SimpleNamespace(sleep=AsyncMock())
+        find = load("findMedia", "utils.py", self.env)
+        self.env["getRecordings"].side_effect = [TimeoutError("day"), Exception("USER_ID_FULL")]
+        await find(self.hass, self.device, self.entry,
+                   [{"day": {"date": "20261028"}}, {"day": {"date": "20261029"}}])
+        self.assertEqual(self.env["getRecordings"].await_count, 2)
+        self.assertEqual(self.device["mediaScanFailures"], 1)
+        self.env["mediaCleanup"].assert_not_awaited()
+
+    async def check_download_failure(self, action, expected_error):
+        with tempfile.TemporaryDirectory() as folder:
+            self.controller.getTimeCorrection = Mock(return_value=0)
+            self.controller.getRecordings = Mock(return_value=[])
+            self.hass.bus = SimpleNamespace(fire=Mock())
+            downloader = SimpleNamespace(downloadFile=AsyncMock(return_value={
+                "currentAction": action, "fileName": folder + "/1-2.mp4", "errorCode": -71101}))
+            self.env.update(HomeAssistant=object, Tapo=object, Optional=Optional, Callable=Callable,
+                            os=os, pathlib=pathlib, partial=__import__('functools').partial,
+                            getColdDirPathForEntry=lambda *args: folder,
+                            getFileName=lambda *args, **kwargs: "1-2",
+                            getColdFile=lambda *args, **kwargs: folder + "/1-2.mp4",
+                            Downloader=Mock(return_value=downloader), processDownloadStatus=Mock(),
+                            processDownload=AsyncMock())
+            download = load("getRecording", "utils.py", self.env)
+            with self.assertRaises(expected_error):
+                await download(self.hass, self.controller, "test", self.device, "20261029", 1, 2)
+            self.hass.bus.fire.assert_not_called()
+            self.env["processDownload"].assert_not_awaited()
+            self.assertFalse(self.device["isDownloadingStream"])
+
+    async def test_busy_transfer_is_not_reported_as_a_download(self):
+        await self.check_download_failure("Camera busy", RuntimeError)
+
+    async def test_incomplete_transfer_is_not_reported_as_a_download(self):
+        await self.check_download_failure("Giving up", TimeoutError)
 
     def test_blank_onvif_fault_backs_off_and_preserves_last_success(self):
         fault = type("Fault", (Exception,), {"__module__": "zeep.exceptions"})
