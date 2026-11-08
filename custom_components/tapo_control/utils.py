@@ -1208,6 +1208,9 @@ async def getRecording(
         all_recordings_count = (
             len(allRecordings) if totalRecordingCount is False else totalRecordingCount
         )
+        # C200 media services can fail after an accelerated download. Use the
+        # playback request for this model; preserve the default on other devices.
+        basic_info = (entryData.get("camData") or {}).get("basic_info", {})
         downloader = Downloader(
             tapo,
             startDate,
@@ -1218,6 +1221,7 @@ async def getRecording(
             None,
             None,
             downloadUID + ".mp4",
+            method="playback" if basic_info.get("device_model") == "C200" else "download",
         )
 
         entryData["isDownloadingStream"] = True

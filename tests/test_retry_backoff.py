@@ -178,8 +178,10 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.device["mediaScanFailures"], 1)
         self.env["mediaCleanup"].assert_not_awaited()
 
-    async def check_download_failure(self, action, expected_error):
+    async def check_download_failure(self, action, expected_error, model=None):
         with tempfile.TemporaryDirectory() as folder:
+            if model is not None:
+                self.device["camData"] = {"basic_info": {"device_model": model}}
             self.controller.getTimeCorrection = Mock(return_value=0)
             self.controller.getRecordings = Mock(return_value=[])
             self.hass.bus = SimpleNamespace(fire=Mock())
@@ -198,6 +200,15 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
             self.hass.bus.fire.assert_not_called()
             self.env["processDownload"].assert_not_awaited()
             self.assertFalse(self.device["isDownloadingStream"])
+            return self.env["Downloader"].call_args
+
+    async def test_c200_recording_uses_playback(self):
+        call = await self.check_download_failure("Camera busy", RuntimeError, "C200")
+        self.assertEqual(call.kwargs["method"], "playback")
+
+    async def test_other_camera_keeps_accelerated_download(self):
+        call = await self.check_download_failure("Camera busy", RuntimeError, "C510W")
+        self.assertEqual(call.kwargs["method"], "download")
 
     async def test_busy_transfer_is_not_reported_as_a_download(self):
         await self.check_download_failure("Camera busy", RuntimeError)

@@ -38,6 +38,10 @@ commit-based. Do not use inherited upstream version tags: they omit the fork pat
 
 ## Behavior and limits
 
+- C200 recording transfers use the playback request instead of accelerated
+  downloads. This can take longer, but avoids the accelerated transfer path
+  associated with media-service failures during investigation. Other models keep
+  the library's download default. Recording on the SD card is unchanged.
 - Flat storage is the default. Selecting Year/month/day migrates completed video and
   thumbnail files before camera tasks start. Switching back reverses that migration.
 - A blank synchronization-hours setting retains downloaded recordings after camera
