@@ -9,7 +9,7 @@ from homeassistant.helpers import config_validation as cv
 TPLINK_DOMAIN = "tplink"
 
 CONTROL_PORT = "control_port"
-PYTAPO_REQUIRED_VERSION = "3.4.31"
+PYTAPO_REQUIRED_VERSION = "3.4.42"
 DOMAIN = "tapo_control"
 DOMAIN_CONFIG = DOMAIN + "_config"
 BRAND = "TP-Link"
@@ -36,7 +36,18 @@ CONF_CUSTOM_STREAM_HD = "custom_stream_hd"
 CONF_CUSTOM_STREAM_SD = "custom_stream_sd"
 CONF_CUSTOM_STREAM_6 = "custom_stream6"
 CONF_CUSTOM_STREAM_7 = "custom_stream7"
+CUSTOM_STREAM_OPTIONS = {
+    "stream1": CONF_CUSTOM_STREAM_HD,
+    "stream2": CONF_CUSTOM_STREAM_SD,
+    "stream6": CONF_CUSTOM_STREAM_6,
+    "stream7": CONF_CUSTOM_STREAM_7,
+}
 CONF_DIRECT_STREAM_ARGUMENTS = "direct_stream_arguments"
+CONF_LIVE_VIEW_MODE = "live_view_mode"
+CONF_GO2RTC_API_URL = "go2rtc_api_url"
+LIVE_VIEW_HOME_ASSISTANT = "home_assistant"
+LIVE_VIEW_NATIVE_WEBRTC = "native_webrtc"
+LIVE_VIEW_MJPEG = "mjpeg"
 CONF_SHOW_ON_MAP = "show_on_map"
 # Arguments supported by pytapo Streamer when audio is disabled.
 DIRECT_STREAM_ARGUMENTS = (
@@ -84,6 +95,7 @@ MEDIA_VIEW_DAYS_ORDER_OPTIONS = ["Ascending", "Descending"]
 MEDIA_VIEW_RECORDINGS_ORDER_OPTIONS = ["Ascending", "Descending"]
 
 ENABLE_WEBHOOKS = "enable_webhooks"
+# Legacy key retained for migrations.
 ENABLE_STREAM = "enable_stream"
 ENABLE_SOUND_DETECTION = "enable_sound_detection"
 SOUND_DETECTION_PEAK = "sound_detection_peak"

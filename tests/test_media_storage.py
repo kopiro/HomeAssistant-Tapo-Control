@@ -1,9 +1,14 @@
 """Storage layout checks runnable without Home Assistant installed."""
 import importlib.util
+import os
 from pathlib import Path
+import pathlib
+import tempfile
 from tempfile import TemporaryDirectory
 import unittest
 import json
+
+from test_retry_backoff import load
 
 spec = importlib.util.spec_from_file_location(
     'media_storage', Path(__file__).parents[1] / 'custom_components/tapo_control/media_storage.py'
@@ -13,6 +18,19 @@ spec.loader.exec_module(m)
 
 
 class StorageLayoutTests(unittest.TestCase):
+    def test_cold_file_index_distinguishes_dated_and_flat_paths(self):
+        env = dict(os=os, pathlib=pathlib, tempfile=tempfile, recording_files=m.recording_files)
+        for name in ("checkInsideStorage", "prepareColdDir", "listColdFiles", "saveThumbnail"):
+            load(name, "utils.py", env)
+        with TemporaryDirectory() as root:
+            name = "1704151800-1704151860.jpg"
+            dated = m.recording_path(root, "thumbs", name, m.DATED, "Europe/Stockholm")
+            flat = m.recording_path(root, "thumbs", name, m.FLAT, "Europe/Stockholm")
+            env["saveThumbnail"](str(dated), b"picture", root)
+            self.assertEqual(dated.read_bytes(), b"picture")
+            self.assertEqual(env["listColdFiles"](root)["thumbs"], {str(dated)})
+            self.assertFalse(flat.exists())
+
     def test_timezone_and_child_filename(self):
         # 2024-01-01 23:30 UTC falls on January 2 in Stockholm.
         name = 'hub-child-1704151800-1704151860.mp4'

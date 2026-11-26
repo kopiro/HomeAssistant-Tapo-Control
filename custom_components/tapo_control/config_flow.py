@@ -2,6 +2,7 @@ from .media_storage import MEDIA_STORAGE_LAYOUT, FLAT, DATED
 import voluptuous as vol
 import os
 import re
+from urllib.parse import urlsplit
 
 from homeassistant.core import callback
 
@@ -21,6 +22,7 @@ from homeassistant.helpers.selector import selector
 
 from .utils import (
     getCamData,
+    get_custom_stream_links,
     getIP,
     registerController,
     isRtspStreamWorking,
@@ -36,7 +38,6 @@ from .const import (
     DOMAIN,
     CONTROL_PORT,
     ENABLE_MOTION_SENSOR,
-    ENABLE_STREAM,
     ENABLE_SOUND_DETECTION,
     ENABLE_WEBHOOKS,
     IS_KLAP_DEVICE,
@@ -61,9 +62,15 @@ from .const import (
     CONF_CUSTOM_STREAM_SD,
     CONF_CUSTOM_STREAM_6,
     CONF_CUSTOM_STREAM_7,
+    CUSTOM_STREAM_OPTIONS,
     CONF_DIRECT_STREAM_ARGUMENTS,
+    CONF_LIVE_VIEW_MODE,
+    CONF_GO2RTC_API_URL,
     CONF_SHOW_ON_MAP,
     DIRECT_STREAM_ARGUMENTS,
+    LIVE_VIEW_HOME_ASSISTANT,
+    LIVE_VIEW_MJPEG,
+    LIVE_VIEW_NATIVE_WEBRTC,
     HAS_STREAM_6,
     HAS_STREAM_7,
     CONF_RTSP_TRANSPORT,
@@ -80,11 +87,26 @@ from .const import (
 )
 
 
+LIVE_VIEW_MODE_SELECTOR = selector(
+    {
+        "select": {
+            "options": [
+                LIVE_VIEW_HOME_ASSISTANT,
+                LIVE_VIEW_NATIVE_WEBRTC,
+                LIVE_VIEW_MJPEG,
+            ],
+            "mode": "dropdown",
+            "translation_key": CONF_LIVE_VIEW_MODE,
+        }
+    }
+)
+
+
 @HANDLERS.register(DOMAIN)
 class FlowHandler(ConfigFlow):
     """Handle a config flow."""
 
-    VERSION = 25
+    VERSION = 26
 
     def __init__(self):
         self.tapoHasStream6 = False
@@ -102,7 +124,9 @@ class FlowHandler(ConfigFlow):
         )
         host = self.reauth_entry.data[CONF_IP_ADDRESS]
         controlPort = self.reauth_entry.data[CONTROL_PORT]
-        if not areCameraPortsOpened(host, controlPort=controlPort):
+        if not await self.hass.async_add_executor_job(
+            areCameraPortsOpened, host, controlPort
+        ):
             LOGGER.debug(
                 "[REAUTH][%s] Some of the required ports are closed.",
                 host,
@@ -431,7 +455,6 @@ class FlowHandler(ConfigFlow):
         errors = {}
         enable_motion_sensor = True
         enable_webhooks = True
-        enable_stream = True
         enable_time_sync = False
         enable_sound_detection = False
         sound_detection_peak = -30
@@ -452,10 +475,6 @@ class FlowHandler(ConfigFlow):
                 enable_webhooks = user_input[ENABLE_WEBHOOKS]
             else:
                 enable_webhooks = False
-            if ENABLE_STREAM in user_input:
-                enable_stream = user_input[ENABLE_STREAM]
-            else:
-                enable_stream = False
             if ENABLE_TIME_SYNC in user_input:
                 enable_time_sync = user_input[ENABLE_TIME_SYNC]
             else:
@@ -484,6 +503,7 @@ class FlowHandler(ConfigFlow):
                 rtsp_transport = user_input[CONF_RTSP_TRANSPORT]
             else:
                 rtsp_transport = RTSP_TRANS_PROTOCOLS[0]
+            live_view_mode = user_input.get(CONF_LIVE_VIEW_MODE, LIVE_VIEW_HOME_ASSISTANT)
             host = self.tapoHost
             controlPort = self.tapoControlPort
             cloud_password = self.tapoCloudPassword
@@ -533,7 +553,6 @@ class FlowHandler(ConfigFlow):
                         MEDIA_SYNC_COLD_STORAGE_PATH: "",
                         ENABLE_MOTION_SENSOR: False,
                         ENABLE_WEBHOOKS: False,
-                        ENABLE_STREAM: False,
                         ENABLE_TIME_SYNC: False,
                         CONF_IP_ADDRESS: host,
                         REPORTED_IP_ADDRESS: reported_ip_address,
@@ -550,6 +569,7 @@ class FlowHandler(ConfigFlow):
                         CONF_CUSTOM_STREAM_SD: "",
                         CONF_CUSTOM_STREAM_6: "",
                         CONF_CUSTOM_STREAM_7: "",
+                        CONF_LIVE_VIEW_MODE: live_view_mode,
                         CONF_RTSP_TRANSPORT: "tcp",
                         UPDATE_INTERVAL_MAIN: UPDATE_INTERVAL_MAIN_DEFAULT,
                         UPDATE_INTERVAL_BATTERY: UPDATE_INTERVAL_BATTERY_DEFAULT,
@@ -569,7 +589,6 @@ class FlowHandler(ConfigFlow):
                         MEDIA_SYNC_COLD_STORAGE_PATH: "",
                         ENABLE_MOTION_SENSOR: enable_motion_sensor,
                         ENABLE_WEBHOOKS: enable_webhooks,
-                        ENABLE_STREAM: enable_stream,
                         ENABLE_TIME_SYNC: enable_time_sync,
                         CONF_IP_ADDRESS: host,
                         CONTROL_PORT: controlPort,
@@ -588,6 +607,7 @@ class FlowHandler(ConfigFlow):
                         CONF_CUSTOM_STREAM_SD: "",
                         CONF_CUSTOM_STREAM_6: "",
                         CONF_CUSTOM_STREAM_7: "",
+                        CONF_LIVE_VIEW_MODE: live_view_mode,
                         CONF_RTSP_TRANSPORT: rtsp_transport,
                         UPDATE_INTERVAL_MAIN: UPDATE_INTERVAL_MAIN_DEFAULT,
                         UPDATE_INTERVAL_BATTERY: UPDATE_INTERVAL_BATTERY_DEFAULT,
@@ -619,10 +639,6 @@ class FlowHandler(ConfigFlow):
                         description={"suggested_value": enable_time_sync},
                     ): bool,
                     vol.Optional(
-                        ENABLE_STREAM,
-                        description={"suggested_value": enable_stream},
-                    ): bool,
-                    vol.Optional(
                         ENABLE_SOUND_DETECTION,
                         description={"suggested_value": enable_sound_detection},
                     ): bool,
@@ -638,6 +654,9 @@ class FlowHandler(ConfigFlow):
                         SOUND_DETECTION_RESET,
                         description={"suggested_value": sound_detection_reset},
                     ): int,
+                    vol.Optional(
+                        CONF_LIVE_VIEW_MODE, default=LIVE_VIEW_HOME_ASSISTANT
+                    ): LIVE_VIEW_MODE_SELECTOR,
                     vol.Optional(
                         CONF_EXTRA_ARGUMENTS,
                         description={"suggested_value": extra_arguments},
@@ -807,7 +826,6 @@ class FlowHandler(ConfigFlow):
                         MEDIA_SYNC_COLD_STORAGE_PATH: "",
                         ENABLE_MOTION_SENSOR: False,
                         ENABLE_WEBHOOKS: False,
-                        ENABLE_STREAM: False,
                         ENABLE_TIME_SYNC: False,
                         CONF_IP_ADDRESS: host,
                         REPORTED_IP_ADDRESS: reported_ip_address,
@@ -824,6 +842,7 @@ class FlowHandler(ConfigFlow):
                         CONF_CUSTOM_STREAM_SD: "",
                         CONF_CUSTOM_STREAM_6: "",
                         CONF_CUSTOM_STREAM_7: "",
+                        CONF_LIVE_VIEW_MODE: LIVE_VIEW_HOME_ASSISTANT,
                         CONF_RTSP_TRANSPORT: "tcp",
                         UPDATE_INTERVAL_MAIN: UPDATE_INTERVAL_MAIN_DEFAULT,
                         UPDATE_INTERVAL_BATTERY: UPDATE_INTERVAL_BATTERY_DEFAULT,
@@ -881,7 +900,7 @@ class FlowHandler(ConfigFlow):
                     raise Exception("already_configured")
 
                 LOGGER.debug("[ADD DEVICE][%s] Verifying port %s.", host, controlPort)
-                if isOpen(host, controlPort):
+                if await self.hass.async_add_executor_job(isOpen, host, controlPort):
                     LOGGER.debug(
                         "[ADD DEVICE][%s] Port %s is opened, verifying access to control of camera.",
                         host,
@@ -906,7 +925,9 @@ class FlowHandler(ConfigFlow):
                                 "[ADD DEVICE][%s] Verifying ports all required camera ports.",
                                 host,
                             )
-                            if not areCameraPortsOpened(host, controlPort=controlPort):
+                            if not await self.hass.async_add_executor_job(
+                                areCameraPortsOpened, host, controlPort
+                            ):
                                 LOGGER.debug(
                                     "[ADD DEVICE][%s] Some of the required ports are closed.",
                                     host,
@@ -1105,7 +1126,9 @@ class FlowHandler(ConfigFlow):
                             "[ADD DEVICE][%s] Verifying ports all required camera ports.",
                             host,
                         )
-                        if not areCameraPortsOpened(host, controlPort=controlPort):
+                        if not await self.hass.async_add_executor_job(
+                            areCameraPortsOpened, host, controlPort
+                        ):
                             LOGGER.debug(
                                 "[ADD DEVICE][%s] Some of the required ports are closed.",
                                 host,
@@ -1648,23 +1671,40 @@ class TapoOptionsFlowHandler(OptionsFlow):
         cloud_password = self.config_entry.data[CLOUD_PASSWORD]
         enable_motion_sensor = self.config_entry.data[ENABLE_MOTION_SENSOR]
         enable_webhooks = self.config_entry.data[ENABLE_WEBHOOKS]
-        enable_stream = self.config_entry.data[ENABLE_STREAM]
         show_on_map = self.config_entry.data.get(CONF_SHOW_ON_MAP, True)
+        previous_live_view_mode = self.config_entry.data.get(
+            CONF_LIVE_VIEW_MODE, LIVE_VIEW_HOME_ASSISTANT
+        )
+        live_view_mode = previous_live_view_mode
+        go2rtc_api_url = self.config_entry.data.get(CONF_GO2RTC_API_URL, "")
         enable_time_sync = self.config_entry.data[ENABLE_TIME_SYNC]
         extra_arguments = self.config_entry.data[CONF_EXTRA_ARGUMENTS]
-        custom_stream_hd = self.config_entry.data.get(CONF_CUSTOM_STREAM_HD, "")
-        custom_stream_sd = self.config_entry.data.get(CONF_CUSTOM_STREAM_SD, "")
-        custom_stream6 = self.config_entry.data.get(CONF_CUSTOM_STREAM_6, "")
-        custom_stream7 = self.config_entry.data.get(CONF_CUSTOM_STREAM_7, "")
+        previous_custom_stream_links = get_custom_stream_links(self.config_entry.data)
+        custom_stream_links = previous_custom_stream_links
         direct_stream_arguments = self.config_entry.data.get(
             CONF_DIRECT_STREAM_ARGUMENTS, {}
         )
-        rtsp_transport = self.config_entry.data[CONF_RTSP_TRANSPORT]
+        previous_rtsp_transport = self.config_entry.data[CONF_RTSP_TRANSPORT]
+        rtsp_transport = previous_rtsp_transport
         ip_address = self.config_entry.data[CONF_IP_ADDRESS]
         controlPort = self.config_entry.data[CONTROL_PORT]
         if user_input is not None:
             try:
                 show_on_map = user_input.get(CONF_SHOW_ON_MAP, show_on_map)
+                live_view_mode = user_input.get(CONF_LIVE_VIEW_MODE, live_view_mode)
+                go2rtc_api_url = user_input.get(CONF_GO2RTC_API_URL, "").strip()
+                try:
+                    url = urlsplit(go2rtc_api_url)
+                    if go2rtc_api_url and (
+                        url.scheme not in ("http", "https")
+                        or not url.hostname
+                        or url.path not in ("", "/")
+                        or url.query
+                        or url.fragment
+                    ):
+                        raise ValueError
+                except ValueError:
+                    raise ValueError("Invalid go2rtc API URL") from None
                 direct_stream_arguments = user_input.get(
                     CONF_DIRECT_STREAM_ARGUMENTS, {}
                 )
@@ -1763,30 +1803,10 @@ class TapoOptionsFlowHandler(OptionsFlow):
                 else:
                     enable_webhooks = False
 
-                if ENABLE_STREAM in user_input:
-                    enable_stream = user_input[ENABLE_STREAM]
-                else:
-                    enable_stream = False
-
-                if CONF_CUSTOM_STREAM_HD in user_input:
-                    custom_stream_hd = user_input[CONF_CUSTOM_STREAM_HD]
-                else:
-                    custom_stream_hd = ""
-
-                if CONF_CUSTOM_STREAM_SD in user_input:
-                    custom_stream_sd = user_input[CONF_CUSTOM_STREAM_SD]
-                else:
-                    custom_stream_sd = ""
-
-                if CONF_CUSTOM_STREAM_6 in user_input:
-                    custom_stream6 = user_input[CONF_CUSTOM_STREAM_6]
-                else:
-                    custom_stream6 = ""
-
-                if CONF_CUSTOM_STREAM_7 in user_input:
-                    custom_stream7 = user_input[CONF_CUSTOM_STREAM_7]
-                else:
-                    custom_stream7 = ""
+                custom_stream_links = {
+                    key: user_input.get(key, "").strip()
+                    for key in CUSTOM_STREAM_OPTIONS.values()
+                }
 
                 if CONF_EXTRA_ARGUMENTS in user_input:
                     extra_arguments = user_input[CONF_EXTRA_ARGUMENTS]
@@ -1961,8 +1981,9 @@ class TapoOptionsFlowHandler(OptionsFlow):
                 )
 
                 allConfigData = {**self.config_entry.data}
-                allConfigData[ENABLE_STREAM] = enable_stream
                 allConfigData[CONF_SHOW_ON_MAP] = show_on_map
+                allConfigData[CONF_LIVE_VIEW_MODE] = live_view_mode
+                allConfigData[CONF_GO2RTC_API_URL] = go2rtc_api_url
                 allConfigData[ENABLE_MOTION_SENSOR] = enable_motion_sensor
                 allConfigData[ENABLE_WEBHOOKS] = enable_webhooks
                 allConfigData[CONF_IP_ADDRESS] = ip_address
@@ -1972,10 +1993,7 @@ class TapoOptionsFlowHandler(OptionsFlow):
                 allConfigData[CLOUD_PASSWORD] = cloud_password
                 allConfigData[ENABLE_TIME_SYNC] = enable_time_sync
                 allConfigData[CONF_EXTRA_ARGUMENTS] = extra_arguments
-                allConfigData[CONF_CUSTOM_STREAM_HD] = custom_stream_hd
-                allConfigData[CONF_CUSTOM_STREAM_SD] = custom_stream_sd
-                allConfigData[CONF_CUSTOM_STREAM_6] = custom_stream6
-                allConfigData[CONF_CUSTOM_STREAM_7] = custom_stream7
+                allConfigData.update(custom_stream_links)
                 allConfigData[CONF_DIRECT_STREAM_ARGUMENTS] = direct_stream_arguments
                 allConfigData[CONF_RTSP_TRANSPORT] = rtsp_transport
                 allConfigData[CONTROL_PORT] = controlPort
@@ -1987,9 +2005,18 @@ class TapoOptionsFlowHandler(OptionsFlow):
                     + str(controlPort),
                 )
 
-                if ipChanged or rtspEnablementChanged:
+                # The update listener reloads changes to stream sources and transport.
+                if (
+                    rtsp_transport != previous_rtsp_transport
+                    or custom_stream_links != previous_custom_stream_links
+                ):
+                    return self.async_create_entry(title="", data=None)
+
+                if ipChanged or rtspEnablementChanged or (
+                    live_view_mode != previous_live_view_mode
+                ):
                     LOGGER.debug(
-                        "[%s] IP or RTSP Enablement Changed, reloading entry...",
+                        "[%s] IP, RTSP or live view mode changed, reloading entry...",
                         ip_address,
                     )
                     await self.hass.config_entries.async_reload(
@@ -2006,6 +2033,8 @@ class TapoOptionsFlowHandler(OptionsFlow):
                     errors[
                         CONF_DIRECT_STREAM_ARGUMENTS
                     ] = "invalid_direct_stream_arguments"
+                elif str(e) == "Invalid go2rtc API URL":
+                    errors[CONF_GO2RTC_API_URL] = "invalid_go2rtc_api_url"
                 elif "Failed to establish a new connection" in str(e):
                     errors["base"] = "connection_failed"
                     LOGGER.error(e)
@@ -2049,31 +2078,22 @@ class TapoOptionsFlowHandler(OptionsFlow):
                         ENABLE_WEBHOOKS,
                         description={"suggested_value": enable_webhooks},
                     ): bool,
-                    vol.Optional(
-                        ENABLE_STREAM,
-                        description={"suggested_value": enable_stream},
-                    ): bool,
                     vol.Optional(CONF_SHOW_ON_MAP, default=show_on_map): bool,
+                    vol.Optional(
+                        CONF_LIVE_VIEW_MODE, default=live_view_mode
+                    ): LIVE_VIEW_MODE_SELECTOR,
+                    vol.Optional(
+                        CONF_GO2RTC_API_URL,
+                        description={"suggested_value": go2rtc_api_url},
+                    ): str,
                     vol.Optional(
                         CONF_EXTRA_ARGUMENTS,
                         description={"suggested_value": extra_arguments},
                     ): str,
-                    vol.Optional(
-                        CONF_CUSTOM_STREAM_HD,
-                        description={"suggested_value": custom_stream_hd},
-                    ): str,
-                    vol.Optional(
-                        CONF_CUSTOM_STREAM_SD,
-                        description={"suggested_value": custom_stream_sd},
-                    ): str,
-                    vol.Optional(
-                        CONF_CUSTOM_STREAM_6,
-                        description={"suggested_value": custom_stream6},
-                    ): str,
-                    vol.Optional(
-                        CONF_CUSTOM_STREAM_7,
-                        description={"suggested_value": custom_stream7},
-                    ): str,
+                    **{
+                        vol.Optional(key, description={"suggested_value": link}): str
+                        for key, link in custom_stream_links.items()
+                    },
                     vol.Optional(
                         CONF_RTSP_TRANSPORT,
                         description={"suggested_value": rtsp_transport},

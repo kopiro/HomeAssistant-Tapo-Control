@@ -50,10 +50,12 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
                         TIME_SYNC_PERIOD=3600, Unresolvable=Unresolvable,
                         async_update_sync_sensors=AsyncMock(), getRecordings=AsyncMock(),
                         getRecording=AsyncMock(), findMedia=AsyncMock(),
-                        preloadRecordingThumbnails=AsyncMock(), mediaCleanup=AsyncMock())
+                        preloadRecordingThumbnails=AsyncMock(), mediaCleanup=AsyncMock(),
+                        getColdFiles=AsyncMock(return_value={"videos": set(), "thumbs": set()}))
         self.delay = load("retryDelay", "utils.py", self.env)
         self.sync = load("mediaSync", "__init__.py", self.env)
         self.scan = load("scheduleAll", "utils.py", self.env)
+        load("scanMedia", "utils.py", self.env)
         self.clock_error = load("handleTimeSyncError", "__init__.py", self.env)
 
     def test_delays_grow_and_cap(self):
@@ -135,14 +137,21 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
             self.clock.return_value += 30
             raise TimeoutError("initial catalog")
         self.controller.getRecordingsList.side_effect = fail
+        tasks = []
+        self.entry.async_create_background_task.side_effect = (
+            lambda hass, coroutine, name: tasks.append(asyncio.create_task(coroutine))
+        )
         await self.scan(self.hass, self.device, self.entry, self.sync)
+        await tasks.pop()
         self.assertEqual(self.device["mediaScanFailures"], 1)
         self.assertEqual(self.device["lastMediaScanAttempt"], 1030)
         self.clock.return_value = 1329
         await self.scan(self.hass, self.device, self.entry, self.sync)
         self.assertEqual(self.controller.getRecordingsList.call_count, 1)
+        self.assertFalse(tasks)
         self.clock.return_value = 1330
         await self.scan(self.hass, self.device, self.entry, self.sync)
+        await tasks.pop()
         self.assertEqual(self.device["mediaScanFailures"], 2)
         self.assertFalse(self.device["initialMediaScanRunning"])
 
@@ -192,6 +201,9 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
                             getColdDirPathForEntry=lambda *args: folder,
                             getFileName=lambda *args, **kwargs: "1-2",
                             getColdFile=lambda *args, **kwargs: folder + "/1-2.mp4",
+                            prepareColdDir=lambda root, relative: Path(root, relative).mkdir(
+                                parents=True, exist_ok=True),
+                            coldFileExists=AsyncMock(return_value=False),
                             Downloader=Mock(return_value=downloader), processDownloadStatus=Mock(),
                             processDownload=AsyncMock())
             download = load("getRecording", "utils.py", self.env)

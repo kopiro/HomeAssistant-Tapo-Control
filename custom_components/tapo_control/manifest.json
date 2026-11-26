@@ -6,13 +6,14 @@
   "codeowners": [
     "@kopiro"
   ],
-  "version": "7.2.14",
+  "version": "7.3.12",
   "requirements": [
-    "pytapo==3.4.31",
+    "pytapo==3.4.42",
     "python-kasa[speedups]>=0.10.2"
   ],
   "dependencies": [
     "ffmpeg",
+    "media_source",
     "onvif",
     "stream",
     "network"

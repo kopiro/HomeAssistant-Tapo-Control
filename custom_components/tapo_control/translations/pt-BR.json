@@ -1,5 +1,14 @@
 {
   "title": "Tapo: Cameras Control",
+  "selector": {
+    "live_view_mode": {
+      "options": {
+        "home_assistant": "Home Assistant (automático)",
+        "native_webrtc": "WebRTC nativo (experimental)",
+        "mjpeg": "MJPEG (somente vídeo)"
+      }
+    }
+  },
   "config": {
     "flow_title": "Tapo: Cameras Control {name}",
     "step": {
@@ -26,13 +35,16 @@
         "data": {
           "enable_motion_sensor": "Habilitar sensor de movimento",
           "enable_time_sync": "Sincronizar Hora Automaticamente",
-          "enable_stream": "Usar stream do Home Assistant (requer reinicialização)",
           "enable_sound_detection": "Ativar detecção de limite de som (requer reinicialização)",
           "sound_detection_peak": "[Detecção de som] Pico em dB. 0 é muito alto e -100 é baixo.",
           "sound_detection_duration": "[Detecção de som] Quanto tempo o ruído precisa estar acima do pico para acionar o estado.",
-          "sound_detection_reset": "[Detecção de som] O tempo para redefinir o estado depois que nenhum novo ruído ultrapassar o pico."
+          "sound_detection_reset": "[Detecção de som] O tempo para redefinir o estado depois que nenhum novo ruído ultrapassar o pico.",
+          "live_view_mode": "Modo de visualização ao vivo"
         },
-        "description": "Quase lá!\nSó mais algumas opções..."
+        "description": "Quase lá!\nSó mais algumas opções...",
+        "data_description": {
+          "live_view_mode": "**Home Assistant (automático)** é o modo padrão. O Home Assistant escolhe HLS ou um provedor WebRTC disponível, como o go2rtc.\n\n**WebRTC nativo (experimental)** usa o player da integração e oferece áudio bidirecional em câmeras compatíveis. Pode aumentar o uso da CPU.\n\n**MJPEG (somente vídeo)** transmite imagens JPEG para visualização ao vivo. Escolha outro modo para ouvir áudio ou gravar pelo Home Assistant."
+        }
       }
     },
     "error": {
@@ -61,22 +73,24 @@
     "step": {
       "auth": {
         "data": {
+          "go2rtc_api_url": "URL da API go2rtc para reprodução WebRTC nativa",
           "ip_address": "Endereço IP",
           "username": "Nome de Usuário",
           "password": "Senha",
           "enable_motion_sensor": "Habilitar sensor de movimento",
-          "enable_stream": "Usar stream do Home Assistant (requer reinicialização)",
           "show_on_map": "Mostrar câmera no mapa",
           "enable_sound_detection": "Ativar detecção de limite de som (requer reinicialização)",
           "cloud_password": "Senha cloud (Opcional)",
           "sound_detection_peak": "[Detecção de som] Pico em dB. 0 é muito alto e -100 é baixo.",
           "sound_detection_duration": "[Detecção de som] Quanto tempo o ruído precisa estar acima do pico para acionar o estado.",
           "sound_detection_reset": "[Detecção de som] O tempo para redefinir o estado depois que nenhum novo ruído ultrapassar o pico.",
-          "direct_stream_arguments": "Parâmetros FFmpeg dos fluxos diretos"
+          "direct_stream_arguments": "Parâmetros FFmpeg dos fluxos diretos",
+          "live_view_mode": "Modo de visualização ao vivo"
         },
-        "description": "Modificar configurações da sua Tapo câmera.\n\nUsar stream do Home Assistant:\nSim - Maior delay de reprodução, menor uso de CPU, permite controle de reprodução\nNão - delay de reprodução muito curto, maior uso de CPU, sem controle de reprodução",
+        "description": "Modificar configurações da sua Tapo câmera.",
         "data_description": {
-          "direct_stream_arguments": "Opções avançadas para fluxos diretos e imagens. Um mapeamento vazio restaura os valores padrão. -vsync: null omite este parâmetro. Suportados: -loglevel, -probesize, -analyzeduration, -frames:v, -map-video, -vsync, -c:v, -f. Aplica-se a novos fluxos; recarregue a integração para parar os existentes. As imagens nativas da câmera não são afetadas."
+          "direct_stream_arguments": "Opções avançadas para fluxos diretos e imagens. Um mapeamento vazio restaura os valores padrão. -vsync: null omite este parâmetro. Suportados: -loglevel, -probesize, -analyzeduration, -frames:v, -map-video, -vsync, -c:v, -f. Aplica-se a novos fluxos; recarregue a integração para parar os existentes. As imagens nativas da câmera não são afetadas.",
+          "live_view_mode": "**Home Assistant (automático)** é o modo padrão. O Home Assistant escolhe HLS ou um provedor WebRTC disponível, como o go2rtc.\n\n**WebRTC nativo (experimental)** usa o player da integração e oferece áudio bidirecional em câmeras compatíveis. Pode aumentar o uso da CPU.\n\n**MJPEG (somente vídeo)** transmite imagens JPEG para visualização ao vivo. Escolha outro modo para ouvir áudio ou gravar pelo Home Assistant."
         }
       },
       "media": {
@@ -101,6 +115,7 @@
       "camera_requires_admin": "Sua câmera precisa de senha cloud para controle",
       "incorrect_peak_value": "Valor de pico de detecção de som incorreto.",
       "invalid_direct_stream_arguments": "Insira um mapeamento de parâmetros FFmpeg suportados para texto não vazio ou números. Apenas -vsync pode ser null.",
+      "invalid_go2rtc_api_url": "Informe o endereço do servidor go2rtc com http:// ou https:// e a porta da API ou deixe o campo em branco.",
       "cold_storage_path_overlap": "Os caminhos antigo e novo não podem estar contidos um no outro.",
       "cold_storage_move_pending": "Há uma mudança de armazenamento pendente. Resolva o erro nos registros da integração e recarregue antes de alterar o caminho novamente."
     }
@@ -114,6 +129,9 @@
     "media_player": {
       "music_player": {
         "name": "Reprodutor de música"
+      },
+      "speaker": {
+        "name": "Alto-falante"
       }
     }
   }

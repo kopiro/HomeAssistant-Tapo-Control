@@ -1,5 +1,14 @@
 {
   "title": "Tapo: Cameras Control",
+  "selector": {
+    "live_view_mode": {
+      "options": {
+        "home_assistant": "Home Assistant（自動）",
+        "native_webrtc": "原生 WebRTC（實驗性）",
+        "mjpeg": "MJPEG（僅視訊）"
+      }
+    }
+  },
   "config": {
     "flow_title": "Tapo: Cameras Control {name}",
     "step": {
@@ -47,7 +56,6 @@
           "enable_motion_sensor": "啟用動態感測器",
           "enable_webhooks": "啟用 webhooks",
           "enable_time_sync": "自動同步時間",
-          "enable_stream": "使用 Home Assistant 的串流功能（需要重新啟動）",
           "enable_sound_detection": "啟用聲音閾值檢測（需要重新啟動）",
           "sound_detection_peak": "[聲音檢測] 峰值以分貝（dB）為單位。0 表示非常大聲，-100 表示很小聲。",
           "sound_detection_duration": "[聲音檢測] 噪音需要超過峰值多長時間才會觸發狀態。",
@@ -57,9 +65,13 @@
           "custom_stream_sd": "自定義串流連結（SD）",
           "custom_stream6": "自定義串流連結（長焦 HD）",
           "custom_stream7": "自定義串流連結（長焦 SD）",
-          "rtsp_transport": "RTSP 傳輸機制"
+          "rtsp_transport": "RTSP 傳輸機制",
+          "live_view_mode": "即時檢視模式"
         },
-        "description": "快完成了！\n只剩最後一步了！"
+        "description": "快完成了！\n只剩最後一步了！",
+        "data_description": {
+          "live_view_mode": "**Home Assistant（自動）**是預設模式。Home Assistant 會選用 HLS 或 go2rtc 等可用的 WebRTC 提供者。\n\n**原生 WebRTC（實驗性）**使用此整合的播放器，並可在相容的攝影機上使用雙向語音。此模式可能增加 CPU 使用量。\n\n**MJPEG（僅視訊）**透過連續的 JPEG 畫面提供即時檢視。若要播放音訊或透過 Home Assistant 錄影，請選擇其他模式。"
+        }
       }
     },
     "error": {
@@ -129,13 +141,13 @@
       },
       "auth": {
         "data": {
+          "go2rtc_api_url": "用於原生 WebRTC 播放的 go2rtc API 網址",
           "ip_address": "IP位址",
           "control_port": "控制埠",
           "username": "使用者名稱",
           "password": "密碼",
           "enable_motion_sensor": "啟用動態感測器",
           "enable_webhooks": "啟用 webhooks",
-          "enable_stream": "使用 Home Assistant 的串流功能（需要重新啟動）",
           "show_on_map": "在地圖上顯示攝影機",
           "cloud_password": "雲端密碼（可選）",
           "extra_arguments": "FFmpeg 額外參數（需重新啟動）",
@@ -144,11 +156,13 @@
           "custom_stream6": "自定義串流連結（長焦 HD）",
           "custom_stream7": "自定義串流連結（長焦 SD）",
           "rtsp_transport": "RTSP 傳輸機制",
-          "direct_stream_arguments": "直接串流 FFmpeg 參數"
+          "direct_stream_arguments": "直接串流 FFmpeg 參數",
+          "live_view_mode": "即時檢視模式"
         },
-        "description": "修改您的 Tapo 攝影機設定\n\n使用 Home Assistant 的串流:\nYes - 播放延遲較長，CPU 使用率較低，允許播放控制。\nNo - 播放延遲非常短，CPU 使用率較高，不允許播放控制。",
+        "description": "修改您的 Tapo 攝影機設定",
         "data_description": {
-          "direct_stream_arguments": "直接串流與快照的進階設定。使用空白對應表還原預設值。將 -vsync 設為 null 可省略此參數。支援：-loglevel、-probesize、-analyzeduration、-frames:v、-map-video、-vsync、-c:v、-f。新串流啟動時生效；重新載入整合可停止現有串流。 不影響相機原生快照。"
+          "direct_stream_arguments": "直接串流與快照的進階設定。使用空白對應表還原預設值。將 -vsync 設為 null 可省略此參數。支援：-loglevel、-probesize、-analyzeduration、-frames:v、-map-video、-vsync、-c:v、-f。新串流啟動時生效；重新載入整合可停止現有串流。 不影響相機原生快照。",
+          "live_view_mode": "**Home Assistant（自動）**是預設模式。Home Assistant 會選用 HLS 或 go2rtc 等可用的 WebRTC 提供者。\n\n**原生 WebRTC（實驗性）**使用此整合的播放器，並可在相容的攝影機上使用雙向語音。此模式可能增加 CPU 使用量。\n\n**MJPEG（僅視訊）**透過連續的 JPEG 畫面提供即時檢視。若要播放音訊或透過 Home Assistant 錄影，請選擇其他模式。"
         }
       }
     },
@@ -165,6 +179,7 @@
       "incorrect_peak_value": "錯誤的聲音檢測峰值。",
       "incorrect_options_action": "選擇了錯誤的動作",
       "invalid_direct_stream_arguments": "請輸入支援的 FFmpeg 參數與非空文字或數值的對應表。只有 -vsync 可以設為 null。",
+      "invalid_go2rtc_api_url": "請輸入含有 http:// 或 https:// 與 API 連接埠的 go2rtc 伺服器網址，或將欄位留空。",
       "cold_storage_path_overlap": "新舊儲存路徑不可互相包含。",
       "cold_storage_move_pending": "儲存資料移動尚未完成。請先解決整合日誌中的錯誤並重新載入，再次變更路徑。"
     }
@@ -178,6 +193,9 @@
     "media_player": {
       "music_player": {
         "name": "音樂播放器"
+      },
+      "speaker": {
+        "name": "喇叭"
       }
     }
   }
