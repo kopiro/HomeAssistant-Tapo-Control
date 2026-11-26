@@ -303,11 +303,15 @@ def getColdDirPathForEntry(hass: HomeAssistant, entry_id: str):
     return coldDirPath.rstrip("/")
 
 
+def getConfiguredHotDirPath(entry_id: str):
+    return os.path.join(getDataPath(), "www", DOMAIN, entry_id)
+
+
 def getHotDirPathForEntry(hass: HomeAssistant, entry_id: str):
     if hass.data[DOMAIN][entry_id]["mediaSyncHotDir"] is not False:
         return hass.data[DOMAIN][entry_id]["mediaSyncHotDir"].rstrip("/")
 
-    hotDirPath = os.path.join(getDataPath(), f"www/{DOMAIN}/{entry_id}/")
+    hotDirPath = getConfiguredHotDirPath(entry_id)
 
     if entry_id in hass.data[DOMAIN]:
         if hass.data[DOMAIN][entry_id]["mediaSyncHotDir"] is False:
@@ -915,8 +919,8 @@ def listDirIfExists(dirPath):
 def listDirWithMtime(dirPath, extension, recursive=False):
     """(name, modification time) of the files with extension in dirPath (executor)."""
     files = []
-    files = recording_files(dirPath) if recursive else listDirIfExists(dirPath)
-    for f in files:
+    filenames = recording_files(dirPath) if recursive else listDirIfExists(dirPath)
+    for f in filenames:
         if f.endswith(extension):
             try:
                 files.append((f, os.stat(os.path.join(dirPath, f)).st_mtime))
@@ -1079,14 +1083,14 @@ def cleanupTemporaryThumbnails(coldDirPath, hotDirPath, preload):
 
 
 async def cleanupThumbnailCache(hass, entry, now=None):
-    if entry.data.get(MEDIA_THUMBNAIL_CACHE, False):
+    if entry.data.get(MEDIA_THUMBNAIL_CACHE, False) or entry.entry_id not in hass.data.get(
+        DOMAIN, {}
+    ):
         return
-    cold = await hass.async_add_executor_job(getColdDirPathForEntry, hass, entry.entry_id)
-    hot = await hass.async_add_executor_job(getHotDirPathForEntry, hass, entry.entry_id)
     await hass.async_add_executor_job(
         cleanupTemporaryThumbnails,
-        cold,
-        hot,
+        getConfiguredColdDirPath(entry),
+        getConfiguredHotDirPath(entry.entry_id),
         entry.data.get(MEDIA_THUMBNAIL_PRELOAD, True),
     )
 

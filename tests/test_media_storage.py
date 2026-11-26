@@ -1,10 +1,13 @@
 """Storage layout checks runnable without Home Assistant installed."""
 import importlib.util
+import datetime
+import logging
 import os
 from pathlib import Path
 import pathlib
 import tempfile
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 import json
 
@@ -15,6 +18,64 @@ spec = importlib.util.spec_from_file_location(
 )
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
+
+
+class MediaCleanupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_thumbnail_cleanup_tolerates_unload_during_executor_dispatch(self):
+        calls = []
+        hass = SimpleNamespace(data={'tapo_control': {'camera': {}}})
+
+        async def run_executor_job(function, *args):
+            hass.data['tapo_control'].pop('camera', None)
+            return function(*args)
+
+        hass.async_add_executor_job = run_executor_job
+        env = dict(
+            DOMAIN='tapo_control', MEDIA_THUMBNAIL_CACHE='cache',
+            MEDIA_THUMBNAIL_PRELOAD='preload',
+            getConfiguredColdDirPath=lambda entry: '/archive/camera',
+            getConfiguredHotDirPath=lambda entry_id: f'/web/{entry_id}',
+            cleanupTemporaryThumbnails=lambda *args: calls.append(args),
+        )
+        cleanup = load('cleanupThumbnailCache', 'utils.py', env)
+        entry = SimpleNamespace(entry_id='camera', data={'preload': False})
+        await cleanup(hass, entry)
+        await cleanup(hass, entry)
+        self.assertEqual(calls, [('/archive/camera', '/web/camera', False)])
+
+    async def test_cleanup_preserves_recent_cache_and_lists_nested_recordings(self):
+        async def run_executor_job(function, *args):
+            return function(*args)
+
+        env = dict(os=os, datetime=datetime, LOGGER=logging.getLogger(__name__),
+                   HomeAssistant=object, recording_files=m.recording_files)
+        for name in ('listDirIfExists', 'listDirWithMtime', 'removeFiles', 'deleteFilesOlderThan'):
+            load(name, 'utils.py', env)
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            expired = root / 'expired.mp4'
+            expired.touch()
+            now = datetime.datetime.utcnow().timestamp()
+            os.utime(expired, (now - 7200, now - 7200))
+            recent = root / 'recent.mp4'
+            recent.touch()
+            os.utime(recent, (now, now))
+
+            hass = SimpleNamespace(async_add_executor_job=run_executor_job)
+            await env['deleteFilesOlderThan'](hass, root, 3600)
+            self.assertFalse(expired.exists())
+            self.assertTrue(recent.exists())
+
+            nested = root / '2026' / '11' / '26'
+            nested.mkdir(parents=True)
+            clip = nested / 'recording.mp4'
+            clip.touch()
+            (nested / 'thumbnail.jpg').touch()
+            self.assertCountEqual(
+                env['listDirWithMtime'](root, '.mp4', recursive=True),
+                [(str(path.relative_to(root)), path.stat().st_mtime) for path in (recent, clip)],
+            )
 
 
 class StorageLayoutTests(unittest.TestCase):
